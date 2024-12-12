@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.migrate.sync.dao.SyncDao">
+
+    <resultMap type="com.example.migrate.sync.domain.OrderTemp" id="orderTempMap">
+        <id property="orderId" column="ORDER_ID" jdbcType="VARCHAR"/>
+        <result property="transId" column="TRANS_ID" jdbcType="VARCHAR"/>
+        <result property="orderNo" column="ORDER_NO" jdbcType="VARCHAR"/>
+        <result property="sessionId" column="SESSION_ID" jdbcType="VARCHAR"/>
+        <result property="userToken" column="USER_TOKEN" jdbcType="VARCHAR"/>
+        <result property="phoneNum" column="PHONE_NUM" jdbcType="VARCHAR"/>
+        <result property="payPhoneNum" column="PAY_PHONE_NUM" jdbcType="VARCHAR"/>
+        <result property="partnerId" column="PARTNER_ID" jdbcType="VARCHAR"/>
+        <result property="spPartnerId" column="SP_PARTNER_ID" jdbcType="VARCHAR"/>
+        <result property="notifyUrl" column="NOTIFY_URL" jdbcType="VARCHAR"/>
+        <result property="snNo" column="SN_NO" jdbcType="VARCHAR"/>
+        <result property="dataSrc" column="DATA_SRC" jdbcType="VARCHAR"/>
+        <result property="qrCode" column="QR_CODE" jdbcType="VARCHAR"/>
+        <result property="couponId" column="COUPON_ID" jdbcType="BIGINT"/>
+        <result property="secondConfirm" column="SECOND_CONFIRM" jdbcType="VARCHAR"/>
+        <result property="inBlackList" column="IN_BLACK_LIST" jdbcType="VARCHAR"/>
+        <result property="status" column="STATUS" jdbcType="VARCHAR"/>
+        <result property="diversionCode" column="DIVERSION_CODE" jdbcType="VARCHAR"/>
+        <result property="submitTime" column="SUBMIT_TIME" jdbcType="TIMESTAMP"/>
+        <result property="updateTime" column="UPDATE_TIME" jdbcType="TIMESTAMP"/>
+        <result property="cSource" column="C_SOURCE" jdbcType="VARCHAR"/>
+        <result property="traceId" column="TRACE_ID" jdbcType="VARCHAR"/>
+        <result property="cpId" column="CP_ID" jdbcType="VARCHAR"/>
+        <result property="contentId" column="CONTENT_Id" jdbcType="VARCHAR"/>
+        <result property="diversionFST" column="diversion_FST" jdbcType="VARCHAR"/>
+        <result property="diversionCSK" column="diversion_CSK" jdbcType="VARCHAR"/>
+        <result property="activityId" column="ACTIVITY_ID" jdbcType="VARCHAR"/>
+        <result property="scanActivityId" column="SCAN_ACTIVITY_ID" jdbcType="VARCHAR"/>
+        <result property="actionId" column="ACTION_ID" jdbcType="VARCHAR"/>
+        <result property="actionCode" column="ACTION_CODE" jdbcType="VARCHAR"/>
+    </resultMap>
+
+    <select id="getOrderTemp" parameterType="java.lang.Integer" resultMap="orderTempMap">
+        SELECT * FROM (SELECT t.*,ROWNUM r FROM T_ORDER_TEMP t
+        WHERE ROWNUM &lt; #{pageEnd} * #{pageSize} +1 )
+        WHERE r &gt; #{pageStart} * #{pageSize}
+    </select>
+
+    <select id="getOrderTempCount" resultType="java.util.HashMap">
+        show routine load for play_record
+    </select>
+
+    <!--动态拼接sql ，需要注意column和tableName的注入风险  column tableName $ -> # -->
+    <select id="dynamicSql" parameterType="com.example.migrate.sync.domain.SQLEntity" resultType="java.util.HashMap">
+        SELECT
+        <foreach collection="columns" index="index" item="column" open="" close="" separator=",">
+            ${column}
+        </foreach>
+        FROM
+        (
+        SELECT
+        <foreach collection="columns" index="index" item="column" open="" close="" separator=",">
+            ${column}
+        </foreach>
+        ,ROWNUM r
+        FROM ${tableName} t
+        WHERE ROWNUM &lt; #{pageEnd} * #{pageSize} +1
+        <if test="where != null and where != ''">
+            AND ${where}
+        </if>
+        <if test="rowIdWhere != null and rowIdWhere != ''">
+            AND ${rowIdWhere}
+        </if>
+        )
+        WHERE r &gt; #{pageStart} * #{pageSize}
+    </select>
+
+    <select id="getCount" parameterType="java.lang.String" resultType="long">
+        select count(1)
+        from ${tableName}
+        <where>
+            <if test="where != null and where != ''">
+                ${where}
+            </if>
+        </where>
+    </select>
+
+    <select id="dynamicRowid" parameterType="com.example.migrate.sync.domain.RowIdEntity" resultType="java.util.HashMap">
+        SELECT ' rowid between ' || chr(39) ||
+        dbms_rowid.rowid_create(1, DOI, lo_fno, lo_block, 0) || chr(39) ||
+        ' and  ' || chr(39) ||
+        dbms_rowid.rowid_create(1, DOI, hi_fno, hi_block, 1000000) ||
+        chr(39) data
+        FROM (SELECT DISTINCT DOI,
+        grp,
+        first_value(relative_fno) over(PARTITION BY DOI, grp ORDER BY relative_fno, block_id rows BETWEEN unbounded preceding AND unbounded following) lo_fno,
+        first_value(block_id) over(PARTITION BY DOI, grp ORDER BY relative_fno, block_id rows BETWEEN unbounded preceding AND unbounded following) lo_block,
+        last_value(relative_fno) over(PARTITION BY DOI, grp ORDER BY relative_fno, block_id rows BETWEEN unbounded preceding AND unbounded following) hi_fno,
+        last_value(block_id + blocks - 1) over(PARTITION BY DOI, grp ORDER BY relative_fno, block_id rows BETWEEN unbounded preceding AND unbounded following) hi_block,
+        SUM(blocks) over(PARTITION BY DOI, grp) sum_blocks,
+        SUBOBJECT_NAME
+        FROM (SELECT obj.OBJECT_ID,
+        obj.SUBOBJECT_NAME,
+        obj.DATA_OBJECT_ID AS DOI,
+        ext.relative_fno,
+        ext.block_id,
+        SUM(blocks) over() SUM,
+        SUM(blocks) over(ORDER BY DATA_OBJECT_ID, relative_fno, block_id) - 0.01 sum_fno,
+        TRUNC((SUM(blocks) over(ORDER BY DATA_OBJECT_ID,
+        relative_fno,
+        block_id) - 0.01) /
+        (SUM(blocks) over() / #{segments})) grp,
+        ext.blocks
+        FROM dba_extents ext, dba_objects obj
+        WHERE ext.segment_name = #{tableName}
+        <if test="partition != null and partition != ''">
+            AND ext.PARTITION_NAME = #{partition}
+        </if>
+        AND ext.owner = #{owner}
+        AND obj.owner = ext.owner
+        AND obj.object_name = ext.segment_name
+        AND obj.DATA_OBJECT_ID IS NOT NULL
+        ORDER BY DATA_OBJECT_ID, relative_fno, block_id)
+        ORDER BY DOI, grp)
+    </select>
+
+    <select id="dynamicPartition" parameterType="com.example.migrate.sync.domain.RowIdEntity" resultType="java.util.HashMap">
+        SELECT TABLE_NAME,PARTITION_NAME,TABLESPACE_NAME FROM USER_TAB_PARTITIONS
+        WHERE TABLE_NAME = #{tableName}
+    </select>
+
+</mapper>

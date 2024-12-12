@@ -1,0 +1,9 @@
+curl -L -g -X POST 'http://localhost:9988/sync' -H 'Content-Type: application/json' -d '{
+    "tableName" : "BACKUP_T_ORDER_TEMP_ITEM",
+    "columns" : ["ITEM_ID","ORDER_ID","PRODUCT_ID","PRODUCT_CODE","PRODUCT_NAME","COUNT","PRICE","CHARGE_ID","FEES","FEE_TYPE","CP_PARTNER_ID","SUBMIT_TIME","CREATE_TIME"],
+    "pageSize" : 100000,
+    "separator" : "^A",
+    "kafkaTopic" : "TOPIC_BACKUP_ORDER_TEMP_ITEM",
+    "targetTableName" : "BACKUP_T_ORDER_TEMP_ITEM",
+    "batchNum" : 2325
+}'

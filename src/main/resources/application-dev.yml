@@ -1,0 +1,10 @@
+server:
+  port: 9966
+
+mybatis:
+  mapper-locations: classpath:mapper/**.xml
+  type-aliases-package: com.example.migrate.domain
+
+#showSql
+logging:
+  level: debug
