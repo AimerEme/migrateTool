@@ -24,9 +24,15 @@ How to use
 
 
 tableName: the table in origin DB,data you want migrate out
+
 columns:the columns of origin and  target table
+
 pageSize: the size of per path,can influence the speed
+
 separator: code may form datas in CSV,make sure your data dont contains the separator
+
 kafkaTopic: if need Routine Load to Load data to StarRocks,Stream Load is not need it
+
 targetTableName: the table in target DB,data you want migrate in
+
 batchNum : the num of batch(total divide pagesize)
